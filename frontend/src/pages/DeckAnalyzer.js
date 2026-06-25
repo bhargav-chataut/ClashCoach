@@ -4,7 +4,7 @@ import CardGrid from "../components/CardGrid";
 import ScorePanel from "../components/ScorePanel";
 import MatchupPanel from "../components/MatchupPanel";
 
-const API = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const API = process.env.REACT_APP_API_URL || "https://clashcoach-production.up.railway.app";
 
 export default function DeckAnalyzer({ tag }) {
   const [player, setPlayer]   = useState(null);
