@@ -1,89 +1,166 @@
-# CR Analyzer
+# ⚔️ ClashCoach
 
-Clash Royale deck analyzer — FastAPI + Redis + Postgres + ML pipeline.
+> AI-powered Clash Royale deck analyzer — win rate prediction, matchup insights, and progression coaching for serious players.
 
-## Quick start
+![Python](https://img.shields.io/badge/Python-3.12-blue?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.111-teal?style=flat-square)
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square)
+![Redis](https://img.shields.io/badge/Redis-7-red?style=flat-square)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square)
 
-### 1. Get a CR API token
-Go to https://developer.clashroyale.com → create an app → whitelist your IP → copy the token.
+---
 
-### 2. Set up your environment
+
+## What is ClashCoach?
+
+ClashCoach pulls your live Clash Royale data via the official CR API and runs it through an ML pipeline to give you:
+
+- **Deck strength scoring** — offense, defense, cycle, consistency breakdown
+- **Win rate prediction** — heuristic now, XGBoost model as battle data grows
+- **Matchup analysis** — which archetypes counter you and by how much
+- **Progression tracking** — battle history, trophy trends, card level gaps
+- **Multi-token API pool** — friends can contribute their API tokens to power richer data
+
+---
+
+## Architecture
+
+```
+React Frontend (Vercel)
+        │
+        │ REST API
+        ▼
+FastAPI Backend (Docker)
+  ├── CR API Router       → Clash Royale official API
+  ├── ML Inference Router → Win rate + matchup predictions  
+  ├── Token Pool Manager  → Round-robin across multiple API keys
+  └── Admin Router        → Runtime token management
+        │
+   ┌────┴────┐
+   │         │
+Redis      PostgreSQL
+(cache)    (battle data)
+        │
+        ▼
+   ML Pipeline
+  ├── Feature Engineering  → Deck vectors, elixir curves, synergy scores
+  ├── Win Predictor        → XGBoost / LightGBM (heuristic → trained)
+  ├── Deck Scorer          → Card embeddings + cosine similarity
+  ├── Matchup Model        → Matrix factorization on deck vs deck win rates
+  └── Play Clustering      → K-Means on battle sequences
+```
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18, Axios |
+| Backend | FastAPI, Python 3.12 |
+| Cache | Redis 7 |
+| Database | PostgreSQL 16 |
+| ML | Scikit-learn, XGBoost (roadmap) |
+| DevOps | Docker, Docker Compose |
+| Deployment | Vercel (frontend), Railway (backend) |
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Docker + Docker Compose
+- Node.js 18+
+- Clash Royale API token → [developer.clashroyale.com](https://developer.clashroyale.com)
+
+### Run locally
+
 ```bash
+# Clone
+git clone https://github.com/bhargav-chataut/ClashCoach.git
+cd ClashCoach
+
+# Backend
+cd cr-analyzer
 cp .env.example .env
-# Edit .env and paste your token into CR_API_TOKENS
-```
-
-### 3. Run
-```bash
+# Add your CR API token to .env
 docker compose up --build
+
+# Frontend (new terminal)
+cd ../frontend
+npm install
+npm start
 ```
 
-API is live at http://localhost:8000
-Interactive docs at http://localhost:8000/docs
+- Backend API: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+- Frontend: http://localhost:3000
 
 ---
 
-## Key endpoints
+## Key Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/players/{tag}` | Player profile |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/players/{tag}` | Player profile + stats |
 | GET | `/api/players/{tag}/battles` | Last 25 battles |
-| GET | `/api/decks/{tag}/current` | Current deck + scores |
-| POST | `/api/decks/analyze` | Analyze any deck |
+| GET | `/api/decks/{tag}/current` | Current deck + feature scores |
 | POST | `/api/ml/analyze-deck` | Full ML analysis |
-| POST | `/api/ml/matchups` | Counter matchups |
-| POST | `/api/admin/tokens/add` | Add a friend's token |
-| GET | `/api/admin/tokens/status` | Token pool size |
-| GET | `/health` | Health check |
+| POST | `/api/ml/matchups` | Counter matchup data |
+| POST | `/api/admin/tokens/add` | Add friend's API token at runtime |
 
 ---
 
-## Adding a friend's token (no restart needed)
+## ML Upgrade Path
+
+The predictor module is designed as a clean swap point:
+
+```
+Phase 1 (now) → Heuristic scoring from deck features
+Phase 2        → Collect battle data via /battles endpoint → store in PostgreSQL  
+Phase 3        → Train XGBoost on (deck_features, opponent_features) → win/loss
+Phase 4        → Matrix factorization for matchup win rates
+Phase 5        → Card embeddings via co-occurrence in winning decks
+```
+
+Router interfaces stay identical — only app/ml/predictor.py internals change.
+
+---
+
+## Multi-Token Pool
+
+Friends can contribute their CR API tokens to power richer data without any code changes:
 
 ```bash
-curl -X POST http://localhost:8000/api/admin/tokens/add \
+curl -X POST https://your-api/api/admin/tokens/add \
   -H "Content-Type: application/json" \
-  -d '{"token": "eyJ...", "label": "Rahul token"}'
+  -d '{"token": "eyJ...", "label": "friend-token"}'
 ```
+
+The pool round-robins across all tokens with automatic rate limit backoff.
 
 ---
 
-## Project structure
 
-```
-cr-analyzer/
-├── app/
-│   ├── main.py           # FastAPI app + middleware
-│   ├── config.py         # Settings from .env
-│   ├── routers/
-│   │   ├── players.py    # Player profile + battles
-│   │   ├── decks.py      # Deck analysis
-│   │   ├── ml.py         # ML inference endpoints
-│   │   └── admin.py      # Token pool management
-│   ├── services/
-│   │   ├── cr_client.py  # CR API HTTP client
-│   │   ├── token_pool.py # Round-robin token manager
-│   │   └── cache.py      # Redis cache helpers
-│   └── ml/
-│       ├── deck_features.py  # Feature engineering
-│       └── predictor.py      # Win rate + matchup (heuristic → ML)
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-└── .env.example
-```
+## Screenshots
+
+![Hero](screenshots/hero.jpg)
+![Deck Analyzer](screenshots/deck-analyzer.jpg)
+
+
+## Roadmap
+
+- [ ] XGBoost win rate model trained on real battle data
+- [ ] Deck progression recommendations
+- [ ] Tournament meta tracker
+- [ ] Clan war strategy assistant
+- [ ] Mobile-responsive UI
+- [ ] Premium tier — Meta Engine Pass
 
 ---
 
-## ML upgrade path
+## Author
 
-The `app/ml/predictor.py` module is a clean swap point:
-
-1. Collect battle data via `/api/players/{tag}/battles` → store in Postgres
-2. Run feature engineering on collected battles
-3. Train XGBoost model on `(deck_features, opponent_deck_features) → win/loss`
-4. Export model to `app/ml/models/win_predictor.pkl`
-5. Replace `predict_win_rate()` to load and call the model
-
-The router interface doesn't change — only the predictor internals.
+**Bhargav Chataut**  
+[GitHub](https://github.com/bhargav-chataut) · Built with 🎮 and way too much ☕
